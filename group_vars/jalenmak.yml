@@ -1,0 +1,14 @@
+---
+ansible_ssh_user: root
+ansible_python_interpreter: /usr/bin/python3
+
+wpdbname: wordpressdb
+wpdbuser: jalen
+wpdbpass: password
+wpdbhost: ansible_eth0.ipv4.address
+wppath: "/var/www/html"
+phppath: "/etc/php/7.3/apache2"
+
+os: "{{ ansible_distribution }}"
+hostname: "{{ ansible_nodename }}"
+core: "{{ ansible_processor_cores }}"

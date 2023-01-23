@@ -1,0 +1,12 @@
+for commenting:
+
+:66,70s/^/#
+
+for uncommenting:
+
+:66,70s/^#/
+
+
+?set nu
+
+? set nonu

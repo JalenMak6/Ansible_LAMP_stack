@@ -1,0 +1,131 @@
+---
+ - name: playbook for testing
+   hosts: jalenmaklamp
+   # it depends on the remote hosts you want to play the playbook on
+   ## if you want to ru nthe playvook to all hosts, then uncomment the below command
+   #hosts: all.   
+   ## slect the user to run on the node or create a group_vars/jalenmaklnmp on and assign the variable onto it
+   #remote_user: jalen
+   gather_facts: true
+   become: yes
+   ignore_errors: true
+   
+   tasks:
+    - name: update all pacakges
+      apt:
+        update_cache=yes
+        upgrade=dist
+
+    - name: install initial packages needed in Debian
+      apt:
+        name: "{{ item }}"
+        state: latest
+      loop:
+        - git
+        - wget
+        - curl
+        - net-tools
+        - vim
+        - python
+        - python3-pip
+        - python3-pymysql
+        
+    - name: Install LAMP stack(Apache2, mariaDB, php-mysql, php, php-cgi, phpcli, apache2 php module)
+      apt:
+        name: "{{ item }}"
+        state: present
+
+      loop:
+        - apache2
+        - mariadb-server
+        - php
+        - php-cgi
+        - php-cli
+        - libapache2-mod-php
+        - php-mysql
+
+    - name: check if a page return status 200
+      uri:
+        url: http://{{ ansible_eth0.ipv4.address }}
+      register: return_state
+
+    - name: output curl result
+      debug:
+        var=return_state
+
+    - name: Create a new database
+      mysql_db:
+        name: "{{wpdbname}}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create a database user with all database privileges
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: "{{wpdbuser}}"
+        password: "{{wpdbpass}}"
+        priv: '{{wpdbname}}.*:ALL'
+        state: present
+        
+##check if user is created:
+## show databses;
+## select host, user, password from mysql.user;
+
+
+    - name: check if /var/www/html has wordpress files
+      stat:
+        path: "{{wppath}}/wp-config-sample.php"
+      register: result
+ 
+    - name: Check the result
+      debug:
+        var: result
+ 
+    - name: Download and unzip Wordpress
+      unarchive:
+        src: https://wordpress.org/latest.tar.gz
+        dest: "{{wppath}}"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+      when: result.stat.exists == false
+ 
+    - name: Edit the /var/www/html directory permission
+      file:
+        path: "{{wppath}}"
+        state: directory
+        recurse: yes
+        owner: www-data
+        group: www-data
+        
+    - name: Copy the wp-config-sample to a file named wp-config.php
+      copy:
+        remote_src: true
+        src: "{{wppath}}/wp-config-sample.php"
+        dest: "{{wppath}}/wp-config.php"
+      when: result.stat.exists == false
+ 
+#    - name: Create unique phrase
+#      command: "lookup('community.general.random_string', min_lower=1, min_upper=1, min_special=1, min_numeric=1, length=64)"
+#      register: salt
+ 
+    - name: Modify wp-config.php
+      replace:
+        path: "{{wppath}}/wp-config.php"
+        regexp: "{{ item.key }}"
+        replace: "{{ item.value }}"
+      loop:
+        - {'key': "database_name_here", 'value': "{{wpdbname}}"}
+        - {'key': "username_here", 'value': "{{wpdbuser}}"}
+        - {'key': "password_here", 'value': "{{wpdbpass}}"}
+        - {'key': "put your unique phrase here", 'value': "test"}
+ 
+    - name: Delete the index.html file
+      file:
+        path: "{{wppath}}/index.html"
+        state: absent
+        
+        
+        
+        
+        
+        
+        

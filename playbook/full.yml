@@ -1,0 +1,317 @@
+---
+ - name: playbook for testing 
+   hosts: jalenmak
+   #hosts: all
+   gather_facts: true
+   # become: yes
+   ignore_errors: true
+
+   handlers:
+    - import_tasks: /etc/ansible/handlers/main.yml
+
+   tasks:
+    - include_vars: /etc/ansible/group_vars/jalenmak.yml
+
+    - name: run ping to all nodes
+      ansible.builtin.ping:
+      register: message
+
+    - name: output the result  
+      debug:
+        var: message
+
+    - name: Set timezone to Pacific time
+      timezone:
+        name: America/Vancouver
+
+    - name: update all pacakges
+      apt:
+        upgrade: dist    
+
+    - name: install initial packages needed in Debian
+      apt:
+        name: "{{ item }}"
+        state: latest
+      loop:
+        - git
+        - wget
+        - curl
+        - net-tools
+        - vim
+        - python
+        - net-tools 
+        - python3-pip
+        - python3-pymysql
+      
+
+    - name: Install LAMP stack(Apache2, mariaDB, php-mysql, php, php-cgi, phpcli, apache2 php module)
+      apt:
+        name: "{{ item }}"
+        state: present
+
+      loop:
+        - apache2
+        - mariadb-server
+        - php
+        - php-cgi
+        - php-cli
+        - libapache2-mod-php
+        - php-mysql
+
+    - name: check if a page return status 200
+      uri:
+        url: http://{{ ansible_default_ipv4.address }}
+      register: return_state
+
+    - name: output curl result
+      debug:
+        var=return_state
+
+    - name: Create a new database
+      mysql_db:
+        name: "{{wpdbname}}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create a new database
+      mysql_db:
+        name: "phpmyadmin"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create a database user with all database privileges
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: "{{wpdbuser}}"
+        password: "{{wpdbpass}}"
+        priv: '{{ wpdbname }}.*:ALL'
+        state: present
+
+    - name: check if /var/www/html has wordpress files
+      stat:
+        path: "{{wppath}}/wp-config-sample.php"
+      register: result
+
+    - name: Check the result
+      debug:
+        var: result
+
+    - name: Download and unzip Wordpress
+      unarchive:
+        src: https://wordpress.org/latest.tar.gz
+        dest: "{{wppath}}"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+      when: result.stat.exists == false 
+
+    - name: Edit the /var/www/html directory permission
+      file:
+        path: "{{wppath}}"
+        state: directory
+        recurse: yes
+        owner: www-data
+        group: www-data
+     
+    - name: Copy the wp-config-sample to a file named wp-config.php
+      copy:
+        remote_src: true
+        src: "{{wppath}}/wp-config-sample.php"
+        dest: "{{wppath}}/wp-config.php"
+      when: result.stat.exists == false
+
+#    - name: Create unique phrase
+#      command: "lookup('community.general.random_string', min_lower=1, min_upper=1, min_special=1, min_numeric=1, length=64)"
+#      register: salt
+
+    - name: Modify wp-config.php
+      replace:
+        path: "{{wppath}}/wp-config.php"
+        regexp: "{{ item.key }}"
+        replace: "{{ item.value }}"
+      loop:
+        - {'key': "database_name_here", 'value': "{{wpdbname}}"} 
+        - {'key': "username_here", 'value': "{{wpdbuser}}"}
+        - {'key': "password_here", 'value': "{{wpdbpass}}"}  
+
+    - name: Remove the line
+      lineinfile:
+        path: "{{wppath}}/wp-config.php"
+        regexp: "{{ item }}"
+        line: ""
+      loop:
+        - '.*put your unique phrase here.*'
+        - '.*AUTH_KEY.*'
+        - '.*NONCE_KEY*'
+        - '.*AUTH_SALT*'
+        - '.*SECURE_AUTH_SALT*'
+        - '.*SECURE_AUTH_SALT*'
+        - '.*LOGGED_IN_KEY*'
+        - '.*LOGGED_IN_SALT*'
+        - '.*NONCE_SALT*'
+        - '.*AUTH_SALT*'
+
+    - name: Call API to generate phrass
+      command:
+        cmd: curl https://api.wordpress.org/secret-key/1.1/salt/
+      register: GET_content
+
+    - name: check the GET_content
+      debug:
+        var: GET_content["stdout_lines"][0]
+
+    - name: Echo the authentication unique keys and salt into wp-config.php
+      lineinfile:
+        path: "{{wppath}}/wp-config.php"
+        regexp: '.* You can change these at any point .*'
+        line: "{{ item }}"
+
+      loop:
+        - "{{ GET_content['stdout_lines'][0]}} \n
+          {{ GET_content['stdout_lines'][1]}} \n
+          {{ GET_content['stdout_lines'][2]}} \n
+          {{ GET_content['stdout_lines'][3]}} \n
+          {{ GET_content['stdout_lines'][4]}} \n
+          {{ GET_content['stdout_lines'][5]}} \n
+          {{ GET_content['stdout_lines'][6]}} \n
+          {{ GET_content['stdout_lines'][7]}} \n"
+
+    - name: Delete the index.html file
+      file:
+        path: "{{wppath}}/index.html"
+        state: absent
+      notify:
+        - restart apache
+
+
+    - name: Restart Apache2
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Install phpmyadmin required packages
+      apt:
+        name: "{{ item }}"
+      loop:
+        - php-mbstring
+        - php-zip
+        - php-gd
+        - php-imagick
+        - php-phpseclib
+        - php-php-gettext
+        - php7.3-common
+        - php7.3-gd
+        - php7.3-imap
+        - php7.3-json
+        - php7.3-curl
+        - php7.3-zip
+        - php7.3-xml
+        - php7.3-mbstring
+        - php7.3-bz2
+        - php7.3-intl 
+        - php7.3-gmp
+    
+    - name: make directory for phpmyadmin
+      file: 
+        path: "{{wppath}}/phpmyadmin"
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: check if /var/www/html/phpmyadmin has wordpress files
+      stat:
+        path: "{{wppath}}/phpmyadmin/config.inc.php"
+      register: phpmyadmincheck
+ 
+    - name: Check the result
+      debug:
+        var: phpmyadmincheck
+
+    - name: Install phpMyAdmin
+      unarchive:
+        src: https://files.phpmyadmin.net/phpMyAdmin/4.9.7/phpMyAdmin-4.9.7-all-languages.tar.gz
+        dest: "{{wppath}}/phpmyadmin"
+        extra_opts: [--strip-components=1]
+        remote_src: yes
+      when: phpmyadmincheck.stat.exists == false
+        
+    - name: Change the phpymadmin directory permission
+      file:
+        path: "{{wppath}}/phpmyadmin"
+        state: directory
+        recurse: yes
+        owner: www-data
+        group: www-data
+      when: phpmyadmincheck.stat.exists == false 
+
+    - name: Copy and rename config.inc.php
+      copy: 
+        remote_src: true
+        src: "{{wppath}}/phpmyadmin/config.sample.inc.php"
+        dest: "{{wppath}}/phpmyadmin/config.inc.php"
+      when: phpmyadmincheck.stat.exists == false
+
+
+    - name: update the config file in config.inc.php
+      copy:
+        src: /etc/ansible/phpconfig/config.inc.php
+        dest: "{{wppath}}/phpmyadmin/config.inc.php"
+      when: phpmyadmincheck.stat.exists == false
+    
+      #- name:  use the create_tables.sql file to create the configuration storage database and tables  
+      #command:
+      # login_unix_socket: /var/run/mysqld/mysqld.sock 
+      # cmd: mariadb < /var/www/html/phpmyadmin/sql/create_tables.sql
+    
+    - name: copy the script to remote server
+      copy:
+        src: /etc/ansible/phpconfig/php.sh
+        dest: /tmp/php.sh
+        mode: 777
+
+    - name: run script to use the create_tables.sql file to create tables    
+      command: sh /tmp/php.sh
+
+    - name: create the pam user and grant it the permissions
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: pam
+        password: "password"
+        priv: 'phpmyadmin.*:ALL'
+        state: present
+      when: phpmyadmincheck.stat.exists == false
+
+
+    - name: create the pam user and grant it the permissions
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: admin
+        password: "password"
+        priv: '*.*:ALL'
+        state: present
+      when: phpmyadmincheck.stat.exists == false
+
+    - name: Set up the phpmyadmin config in Apache
+      copy:
+        src: /etc/ansible/phpconfig/apache.conf
+        dest: /etc/apache2/sites-available/phpmyadmin.conf
+      notify:
+        - restart apache
+
+    - name: modify /etc/php/7.3/apache2/php.ini
+      replace:
+        path: "{{phppath}}/php.ini"
+        regexp: "{{ item.key }}"
+        replace: "{{ item.value }}"
+      loop:
+        - {'key': "^upload_max_filesize.*M$", 'value': "upload_max_filesize = 40M"}
+        - {'key': "^post_max_size.*M$", 'value': "post_max_size = 40M"}
+      notify:
+        - restart apache
+
+    - name: copy the template file to be index.html
+      template:
+        src: /etc/ansible/template/profile.j2
+        dest: "{{wppath}}/index.html"
+        
+        
+
+## if I want to install php8.2, follow the link below
+#https://computingforgeeks.com/how-to-install-php-8-2-on-debian/

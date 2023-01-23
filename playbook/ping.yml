@@ -1,0 +1,21 @@
+---
+ - name: playbook for testing
+   hosts: jalenmaklamp
+   # it depends on the remote hosts you want to play the playbook on
+   ## if you want to ru nthe playvook to all hosts, then uncomment the below command
+   #hosts: all.   
+   ## slect the user to run on the node or create a group_vars/jalenmaklnmp on and assign the variable onto it
+   #remote_user: jalen
+   gather_facts: true
+   become: yes
+   ignore_errors: true
+   
+   tasks:
+    - name: run ping to all nodes
+      ansible.builtin.ping:
+      register: message
+
+    - name: output the result
+      debug:
+        var: message
+
