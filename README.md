@@ -6,7 +6,7 @@ It is fully automated and feel free to try :)
 
 Since this repo is for the demo purposes, please download PHP with the latest version (currently ver. 8.2) and store all the credentials with either Ansible Vault or in the background.
 
-There is a default page (index.html) in the directory, if you do not want to have it, just remove the task (copy the template file to be index.htmlÓ) in full.yml.Cancel changes
+There is a default page (index.html) in the directory, if you do not want to have it, just remove the task (copy the template file to be index.htmlÓ) in full.yml.
 
 
 
