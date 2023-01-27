@@ -9,5 +9,8 @@ Since this repo is for the demo purposes, please download PHP with the latest ve
 There is a default page (index.html) in the directory, if you do not want to have it, just remove the task (copy the template file to be index.html) in full.yml.
 
 
+You can run the following command to deploy the LAMP stack on Debian 10
 
-
+```
+ansible-playbook -i hosts.yml playbook/full.yml
+```
