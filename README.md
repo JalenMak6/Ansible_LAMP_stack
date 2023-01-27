@@ -11,6 +11,8 @@ There is a default page (index.html) in the directory, if you do not want to hav
 
 You can run the following command to deploy the LAMP stack on Debian 10
 
+Please update the host inventory for your Virtual machine IP
+
 ```
 ansible-playbook -i hosts.yml playbook/full.yml
 ```
