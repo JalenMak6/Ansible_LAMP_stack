@@ -1,4 +1,4 @@
-# Ansible_LAMP_stack
+# Ansible_LAMP_stack_On_Debian_10
 
 This repo is going to deploy LAMP + Wordpress web stack with Ansible. With phpMyAdmin, you can manage the database via the web UI.
 It is fully automated and feel free to try :)
